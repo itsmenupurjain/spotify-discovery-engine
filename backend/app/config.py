@@ -20,8 +20,7 @@ class Settings(BaseSettings):
     database_url_sync: str = "postgresql://postgres:postgres@localhost:5432/spotify_discovery"
 
     # AI APIs
-    anthropic_api_key: Optional[str] = None
-    openai_api_key: Optional[str] = None
+    groq_api_key: Optional[str] = None
 
     # Reddit API
     reddit_client_id: Optional[str] = None
@@ -38,11 +37,11 @@ class Settings(BaseSettings):
     clerk_secret_key: Optional[str] = None
 
     # AI Processing
-    classification_model: str = "claude-sonnet-4-6"
+    classification_model: str = "llama3-70b-8192"
     classification_temperature: float = 0.1
     classification_max_tokens: int = 500
     classification_batch_size: int = 50
-    embedding_model: str = "text-embedding-3-small"
+    embedding_model: str = "dummy-embedder"
     embedding_dimensions: int = 1536
 
     # Clustering

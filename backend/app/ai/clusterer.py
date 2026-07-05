@@ -164,31 +164,15 @@ class ThemeClusterer:
         )
 
         try:
-            # Try Claude
-            if settings.anthropic_api_key:
-                import anthropic
-                client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-                message = await client.messages.create(
-                    model=settings.classification_model,
-                    max_tokens=200,
-                    temperature=0.2,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                response_text = message.content[0].text
-                result = json.loads(response_text)
-                result["cluster_id"] = cluster_id
-                return result
-
-        except Exception as e:
-            logger.warning(f"Theme labeling via Claude failed: {e}")
-
-        try:
-            # Fallback to OpenAI
-            if settings.openai_api_key:
+            # Use Groq via OpenAI SDK
+            if settings.groq_api_key:
                 import openai
-                client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
+                client = openai.AsyncOpenAI(
+                    api_key=settings.groq_api_key,
+                    base_url="https://api.groq.com/openai/v1"
+                )
                 response = await client.chat.completions.create(
-                    model="gpt-4o",
+                    model=settings.classification_model,
                     temperature=0.2,
                     max_tokens=200,
                     messages=[{"role": "user", "content": prompt}],

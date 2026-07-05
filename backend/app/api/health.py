@@ -32,8 +32,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
 
     # API keys
     health_data["checks"]["api_keys"] = {
-        "anthropic": bool(settings.anthropic_api_key),
-        "openai": bool(settings.openai_api_key),
+        "groq": bool(settings.groq_api_key),
         "reddit": bool(settings.reddit_client_id),
         "twitter": bool(settings.twitter_bearer_token),
     }

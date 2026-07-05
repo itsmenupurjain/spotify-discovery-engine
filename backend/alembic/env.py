@@ -22,6 +22,19 @@ if config.config_file_name is not None:
 # Set target metadata for autogenerate support
 target_metadata = Base.metadata
 
+import os
+from dotenv import load_dotenv
+
+# Load .env file from the root directory
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.env'))
+
+# Override the alembic.ini URL with the one from our environment
+db_url = os.environ.get("DATABASE_URL_SYNC")
+if db_url:
+    # Escape % for ConfigParser
+    db_url = db_url.replace("%", "%%")
+    config.set_main_option("sqlalchemy.url", db_url)
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""

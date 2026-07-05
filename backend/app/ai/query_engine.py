@@ -284,27 +284,15 @@ class RAGQueryEngine:
         prompt = SYNTHESIS_PROMPT.format(query=query, data=data_str)
 
         try:
-            # Try Claude
-            if settings.anthropic_api_key:
-                import anthropic
-                client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-                message = await client.messages.create(
-                    model=settings.classification_model,
-                    max_tokens=1000,
-                    temperature=0.3,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                return json.loads(message.content[0].text)
-        except Exception as e:
-            logger.warning(f"Claude synthesis failed: {e}")
-
-        try:
-            # Fallback to OpenAI
-            if settings.openai_api_key:
+            # Use Groq via OpenAI SDK
+            if settings.groq_api_key:
                 import openai
-                client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
+                client = openai.AsyncOpenAI(
+                    api_key=settings.groq_api_key,
+                    base_url="https://api.groq.com/openai/v1"
+                )
                 response = await client.chat.completions.create(
-                    model="gpt-4o",
+                    model=settings.classification_model,
                     temperature=0.3,
                     max_tokens=1000,
                     messages=[{"role": "user", "content": prompt}],
@@ -312,7 +300,7 @@ class RAGQueryEngine:
                 )
                 return json.loads(response.choices[0].message.content)
         except Exception as e:
-            logger.error(f"OpenAI synthesis failed: {e}")
+            logger.error(f"Groq synthesis failed: {e}")
 
         # Manual fallback
         return {

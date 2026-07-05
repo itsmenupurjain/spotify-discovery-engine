@@ -6,58 +6,64 @@ Embeds review bodies for semantic search and frustration phrases for clustering.
 import logging
 from typing import List, Optional
 
+import httpx
+from typing import List, Optional
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class Embedder:
-    """Generates embeddings using OpenAI's text-embedding-3-small model."""
+    """Generates embeddings using the free HuggingFace API (sentence-transformers)."""
 
     def __init__(self):
-        self.model = settings.embedding_model
         self.dimensions = settings.embedding_dimensions
+        # We use a popular fast embedding model
+        self.api_url = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
+        self.headers = {}
+        # Optional: Use a token if provided, otherwise rely on free tier limits
+        if hasattr(settings, 'huggingface_api_key') and settings.huggingface_api_key:
+            self.headers["Authorization"] = f"Bearer {settings.huggingface_api_key}"
 
     async def embed_texts(self, texts: List[str]) -> List[Optional[List[float]]]:
         """
-        Embed a list of texts. Returns list of embedding vectors (or None for failures).
-        Processes in batches of 100 to respect API limits.
+        Embed a list of texts via HuggingFace API.
         """
-        if not settings.openai_api_key:
-            logger.error("OpenAI API key not configured for embeddings")
-            return [None] * len(texts)
-
-        try:
-            import openai
-            client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
-        except ImportError:
-            logger.error("openai package not installed")
-            return [None] * len(texts)
-
         all_embeddings = []
-        batch_size = 100
+        batch_size = 50  # Smaller batch size for free tier
 
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
+        async with httpx.AsyncClient() as client:
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i:i + batch_size]
+                cleaned = [t[:2000] if t and t.strip() else "empty" for t in batch]
 
-            # Clean texts (API rejects empty strings)
-            cleaned = [t[:8000] if t and t.strip() else "empty" for t in batch]
+                try:
+                    response = await client.post(
+                        self.api_url, 
+                        headers=self.headers, 
+                        json={"inputs": cleaned, "options": {"wait_for_model": True}},
+                        timeout=30.0
+                    )
+                    
+                    if response.status_code == 200:
+                        # The model returns a list of vectors (usually 384 dimensions)
+                        batch_embeddings = response.json()
+                        
+                        # Pad vectors to match the database's expected dimensions (1536)
+                        for vec in batch_embeddings:
+                            if len(vec) < self.dimensions:
+                                vec.extend([0.0] * (self.dimensions - len(vec)))
+                            elif len(vec) > self.dimensions:
+                                vec = vec[:self.dimensions]
+                            all_embeddings.append(vec)
+                    else:
+                        logger.error(f"HuggingFace API error {response.status_code}: {response.text}")
+                        all_embeddings.extend([None] * len(batch))
 
-            try:
-                response = await client.embeddings.create(
-                    model=self.model,
-                    input=cleaned,
-                    dimensions=self.dimensions,
-                )
-
-                batch_embeddings = [item.embedding for item in response.data]
-                all_embeddings.extend(batch_embeddings)
-
-                logger.info(f"Embedded batch {i // batch_size + 1}: {len(batch)} texts")
-
-            except Exception as e:
-                logger.error(f"Embedding batch {i // batch_size + 1} failed: {e}")
-                all_embeddings.extend([None] * len(batch))
+                except Exception as e:
+                    logger.error(f"Embedding batch {i // batch_size + 1} failed: {e}")
+                    all_embeddings.extend([None] * len(batch))
 
         return all_embeddings
 

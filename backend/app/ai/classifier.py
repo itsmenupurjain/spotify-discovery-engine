@@ -115,64 +115,34 @@ class AIClassifier:
             rating=rating,
         )
 
-        # Try Claude API first
-        result = await self._call_claude(prompt)
+        # Try Groq API
+        result = await self._call_groq(prompt)
         if result:
             result["classification_model"] = self.primary_model
             result["raw_review_id"] = entry.get("id")
             return result
 
-        # Fallback to GPT-4o
-        logger.warning("Claude API failed, trying GPT-4o fallback...")
-        result = await self._call_openai(prompt)
-        if result:
-            result["classification_model"] = "gpt-4o"
-            result["raw_review_id"] = entry.get("id")
-            return result
-
-        # Both failed
+        # Failed
         return {
             "classification_failed": True,
-            "error": "Both Claude and GPT-4o failed",
+            "error": "Groq classification failed",
             "raw_review_id": entry.get("id"),
         }
 
-    async def _call_claude(self, prompt: str) -> Optional[Dict[str, Any]]:
-        """Call Claude API for classification."""
-        if not settings.anthropic_api_key:
-            return None
-
-        try:
-            import anthropic
-
-            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-
-            message = await client.messages.create(
-                model=self.primary_model,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            response_text = message.content[0].text
-            return self._parse_json_response(response_text)
-
-        except Exception as e:
-            logger.error(f"Claude API error: {e}")
-            return None
-
-    async def _call_openai(self, prompt: str) -> Optional[Dict[str, Any]]:
-        """Call OpenAI GPT-4o as fallback."""
-        if not settings.openai_api_key:
+    async def _call_groq(self, prompt: str) -> Optional[Dict[str, Any]]:
+        """Call Groq API via OpenAI SDK for classification."""
+        if not settings.groq_api_key:
             return None
 
         try:
             import openai
-
-            client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
+            client = openai.AsyncOpenAI(
+                api_key=settings.groq_api_key,
+                base_url="https://api.groq.com/openai/v1"
+            )
 
             response = await client.chat.completions.create(
-                model="gpt-4o",
+                model=self.primary_model,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 messages=[{"role": "user", "content": prompt}],
@@ -183,7 +153,7 @@ class AIClassifier:
             return self._parse_json_response(response_text)
 
         except Exception as e:
-            logger.error(f"OpenAI API error: {e}")
+            logger.error(f"Groq API error: {e}")
             return None
 
     def _parse_json_response(self, response_text: str) -> Optional[Dict[str, Any]]:
